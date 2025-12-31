@@ -1,5 +1,4 @@
 
-// Add missing React import
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { TrafficCamera, MapGroundingResult, Severity } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -37,6 +36,7 @@ const CameraMap: React.FC<CameraMapProps> = ({
   const clusterGroupRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
+  const watchIdRef = useRef<number | null>(null);
   
   // Tactical Layers Refs
   const weatherLayerRef = useRef<any>(null);
@@ -54,6 +54,16 @@ const CameraMap: React.FC<CameraMapProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set());
   const [isLayerLoading, setIsLayerLoading] = useState<string | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
+
+  // Cleanup GPS watcher on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
 
   const handleClearRoute = useCallback(() => {
     onSetRouteOrigin(null);
@@ -159,22 +169,50 @@ const CameraMap: React.FC<CameraMapProps> = ({
     }
   };
 
-  const locateUser = () => {
-    if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition((pos) => {
-      const { latitude, longitude } = pos.coords;
-      if (mapRef.current) {
-        mapRef.current.setView([latitude, longitude], 15);
-        if (userMarkerRef.current) mapRef.current.removeLayer(userMarkerRef.current);
-        userMarkerRef.current = L.circleMarker([latitude, longitude], {
-          radius: 8,
-          color: '#3b82f6',
-          fillColor: '#3b82f6',
-          fillOpacity: 1,
-          weight: 2
-        }).addTo(mapRef.current);
+  const toggleTracking = () => {
+    if (isTracking) {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+        watchIdRef.current = null;
       }
-    });
+      setIsTracking(false);
+    } else {
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser');
+        return;
+      }
+
+      setIsTracking(true);
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          if (mapRef.current) {
+            if (userMarkerRef.current) {
+              userMarkerRef.current.setLatLng([latitude, longitude]);
+            } else {
+              const pulseIcon = L.divIcon({
+                className: 'user-location-marker',
+                html: `<div class="relative flex items-center justify-center w-6 h-6">
+                         <div class="absolute w-full h-full bg-blue-500/50 rounded-full animate-ping"></div>
+                         <div class="relative w-3 h-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"></div>
+                       </div>`,
+                iconSize: [24, 24],
+                iconAnchor: [12, 12]
+              });
+              
+              userMarkerRef.current = L.marker([latitude, longitude], { icon: pulseIcon }).addTo(mapRef.current);
+              mapRef.current.setView([latitude, longitude], 15);
+            }
+          }
+        },
+        (err) => {
+          console.error("Tracking Error:", err);
+          setIsTracking(false);
+          if (err.code === 1) alert("Location access denied. Please enable GPS permissions.");
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      );
+    }
   };
 
   const calculateRoute = useCallback(async (origin: TrafficCamera, dest: TrafficCamera) => {
@@ -343,11 +381,18 @@ const CameraMap: React.FC<CameraMapProps> = ({
         </form>
 
         <button 
-          onClick={locateUser}
-          className="w-fit bg-[#0c0a09]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl hover:border-blue-500/50 transition-all active:scale-95"
+          onClick={toggleTracking}
+          className={`w-fit backdrop-blur-xl border rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl transition-all active:scale-95 ${isTracking ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-[#0c0a09]/95 border-white/10 text-zinc-400 hover:border-blue-500/50'}`}
         >
-          <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Fix Position</span>
+          {isTracking ? (
+            <div className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
+            </div>
+          ) : (
+            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          )}
+          <span className="text-[10px] font-black uppercase tracking-widest">{isTracking ? 'Tracking Active' : 'Live GPS'}</span>
         </button>
       </div>
 

@@ -177,6 +177,12 @@ export class TrafficService {
         const status = getVal("status") || "Operational";
         const { severity, trend } = this.determineIntelligence(description, status);
         
+        // Extract timestamp if available
+        const dateRaw = getVal("currentImageDate") || getVal("lastUpdated");
+        const lastUpdate = dateRaw 
+          ? new Date(dateRaw).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         parsedCameras.push({
           id: getVal("id") || `node-${Math.random().toString(36).substr(2, 5)}`,
           name: getVal("name") || "Surveillance Node",
@@ -193,7 +199,7 @@ export class TrafficService {
           severity,
           trend,
           confidence: 85 + Math.floor(Math.random() * 15),
-          lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          lastUpdate
         });
       }
     });
