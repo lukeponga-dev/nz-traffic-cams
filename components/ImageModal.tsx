@@ -52,7 +52,8 @@ const ImageModal: React.FC<ImageModalProps> = ({ camera, onClose }) => {
 
   const handleDeepAnalysis = async () => {
     setIsThinking(true);
-    const result = await geminiService.getDeepIntelligence(camera);
+    // Pass current visual analysis if available to provide thinking model with more context
+    const result = await geminiService.getDeepIntelligence(camera, analysis);
     setDeepIntel(result);
     setIsThinking(false);
   };

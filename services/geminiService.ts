@@ -1,7 +1,7 @@
 
 // Fix: remove responseMimeType and responseSchema from googleMaps tool usage per guidelines.
 import { GoogleGenAI, Type, Modality, LiveServerMessage } from "@google/genai";
-import { CongestionAnalysis, MapGroundingResult, SearchGroundingResult, AdvancedIntelligence } from "../types";
+import { TrafficCamera, CongestionAnalysis, MapGroundingResult, SearchGroundingResult, AdvancedIntelligence } from "../types";
 
 export class GeminiService {
   private cache: Map<string, any> = new Map();
@@ -286,16 +286,66 @@ export class GeminiService {
     }
   }
 
-  async getDeepIntelligence(camera: any): Promise<AdvancedIntelligence> {
+  async getDeepIntelligence(camera: TrafficCamera, currentAnalysis?: CongestionAnalysis | null): Promise<AdvancedIntelligence> {
     try {
+      const parts: any[] = [];
+      
+      let prompt = `Conduct a high-level strategic assessment of this traffic surveillance node: "${camera.name}" (${camera.region}).
+      
+      Operational Data:
+      - Type: ${camera.type}
+      - Direction: ${camera.direction}
+      - Coordinates: ${camera.latitude}, ${camera.longitude}
+      `;
+
+      if (currentAnalysis) {
+        prompt += `\nCurrent Visual Status: ${currentAnalysis.level} congestion.
+        Reasoning: ${currentAnalysis.reasoning}`;
+      }
+
+      prompt += `\n\nDirectives:
+      1. Analyze the node's strategic role in the wider regional transport network.
+      2. Identify structural vulnerabilities or bottleneck risks based on geometry and location.
+      3. Propose 3 tactical optimizations (infrastructure or flow logic) to improve throughput.
+      
+      Think deeply about traffic dynamics, upstream/downstream dependencies, and environmental factors.`;
+
+      parts.push({ text: prompt });
+
+      // Add multimodal context if image is available
+      if (camera.imageUrl) {
+        try {
+          const response = await fetch(camera.imageUrl);
+          const blob = await response.blob();
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+            reader.readAsDataURL(blob);
+          });
+          parts.push({
+            inlineData: {
+              mimeType: blob.type || 'image/jpeg',
+              data: base64
+            }
+          });
+        } catch (e) {
+          console.warn("Deep intel image fetch failed, utilizing text-only context.");
+        }
+      }
+
       const response = await this.ai.models.generateContent({
         model: "gemini-3-pro-preview",
-        contents: `Strategic assessment for "${camera.name}" node in NZ matrix. Suggest structural optimizations.`,
-        config: { thinkingConfig: { thinkingBudget: 32768 } }
+        contents: { parts },
+        config: { 
+          thinkingConfig: { thinkingBudget: 32768 }
+          // maxOutputTokens is intentionally omitted to allow full thinking output
+        }
       });
-      return { response: response.text || "Error." };
+      
+      return { response: response.text || "Strategic assessment model returned empty data." };
     } catch (error) {
-      return { response: "Logic offline." };
+      console.error("Deep intelligence error:", error);
+      return { response: "Strategic reasoning module offline. Verify connectivity or API quota." };
     }
   }
 }
