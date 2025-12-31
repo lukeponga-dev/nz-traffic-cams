@@ -159,18 +159,48 @@ const CameraMap: React.FC<CameraMapProps> = ({
         }
       }
       else if (layerId === 'hazards') {
-        const centerNews = await geminiService.getRegionalTrafficNews('Current Matrix', `near lat:${center.lat} lng:${center.lng}`);
+        // Use coordinates directly for the search query to ground it to the view center
+        const locationStr = `${center.lat.toFixed(4)},${center.lng.toFixed(4)}`;
+        const centerNews = await geminiService.getRegionalTrafficNews('Region', locationStr);
+        
+        // Construct detailed popup with sources
+        const sourceLinks = centerNews.sources?.map(src => 
+          `<a href="${src.uri}" target="_blank" class="block truncate text-blue-400 hover:text-blue-300 transition-colors mt-1 decoration-0">• ${src.title}</a>`
+        ).join('') || '';
+
+        const popupHtml = `
+          <div class="min-w-[200px] max-w-[260px] font-sans">
+            <div class="flex items-center gap-2 mb-2 border-b border-red-500/30 pb-2">
+              <div class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <span class="text-[10px] font-black text-red-500 uppercase tracking-widest">Active Hazards</span>
+            </div>
+            <p class="text-[10px] text-zinc-300 font-medium leading-relaxed mb-2">${centerNews.text}</p>
+            ${sourceLinks ? `<div class="border-t border-zinc-800 pt-1 text-[9px] flex flex-col gap-0.5">${sourceLinks}</div>` : ''}
+          </div>
+        `;
+
         const icon = L.divIcon({
-          html: `<div class="relative">
-            <div class="absolute inset-0 bg-red-600/20 rounded-full animate-ping"></div>
-            <div class="w-10 h-10 rounded-full bg-red-600 border-2 border-white flex items-center justify-center shadow-2xl relative">
-              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          html: `<div class="relative group">
+            <div class="absolute inset-0 bg-red-600/30 rounded-full animate-ping"></div>
+            <div class="w-12 h-12 rounded-full bg-red-600 border-2 border-white flex items-center justify-center shadow-[0_0_20px_rgba(220,38,38,0.5)] relative transition-transform hover:scale-110">
+              <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
             </div>
           </div>`,
           className: 'hazard-icon',
-          iconSize: [40, 40]
+          iconSize: [48, 48],
+          iconAnchor: [24, 24],
+          popupAnchor: [0, -28]
         });
-        hazardLayerRef.current = L.featureGroup([L.marker([center.lat, center.lng], { icon }).bindPopup(`<div class="p-3 bg-black text-white text-[9px] font-bold uppercase w-48 leading-relaxed">${centerNews.text}</div>`)]).addTo(mapRef.current);
+        
+        const marker = L.marker([center.lat, center.lng], { icon }).bindPopup(popupHtml, { 
+            closeButton: false, 
+            className: 'tactical-popup'
+        });
+        
+        hazardLayerRef.current = L.featureGroup([marker]).addTo(mapRef.current);
+        
+        // Auto-open to show the intelligence immediately
+        setTimeout(() => marker.openPopup(), 300);
       }
     } catch (e) {
       console.error(e);
@@ -348,14 +378,14 @@ const CameraMap: React.FC<CameraMapProps> = ({
          <div className="bg-[#0c0a09]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 flex flex-col gap-2 shadow-2xl">
             <h4 className="text-[8px] font-black text-zinc-600 uppercase tracking-widest text-center py-1">Layer HUD</h4>
             {[
-              { id: 'weather', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
-              { id: 'transport', icon: 'M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z M9 9h6 M11 15h2' },
-              { id: 'hazards', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' }
+              { id: 'weather', label: 'Weather Matrix', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+              { id: 'transport', label: 'Transport Hubs', icon: 'M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z M9 9h6 M11 15h2' },
+              { id: 'hazards', label: 'Hazard Scan', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' }
             ].map(layer => (
               <button
                 key={layer.id}
                 onClick={() => toggleLayer(layer.id)}
-                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all active:scale-90 relative ${
+                className={`group relative w-12 h-12 rounded-xl flex items-center justify-center transition-all active:scale-90 ${
                   activeLayers.has(layer.id) ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'
                 }`}
               >
@@ -369,6 +399,9 @@ const CameraMap: React.FC<CameraMapProps> = ({
                 {activeLayers.has(layer.id) && (
                   <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full border-2 border-[#09090b] animate-pulse"></div>
                 )}
+                <div className="absolute right-14 top-1/2 -translate-y-1/2 px-3 py-1 bg-black/90 border border-white/10 rounded text-[9px] font-black text-white uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                  {layer.label}
+                </div>
               </button>
             ))}
          </div>
