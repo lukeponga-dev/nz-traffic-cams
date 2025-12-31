@@ -58,7 +58,7 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
 
   return (
     <div 
-      className="group bg-[#18181b]/60 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all duration-300 flex flex-col relative shadow-lg active:scale-[0.98] cursor-pointer"
+      className="group bg-[#0c0a09]/80 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-blue-500/30 hover:shadow-[0_0_20px_-5px_rgba(59,130,246,0.3)] transition-all duration-300 flex flex-col relative active:scale-[0.98] cursor-pointer"
       onClick={handleCardClick}
     >
       {/* Technical Spec Overlay */}
@@ -92,10 +92,24 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
 
             <button 
                 onClick={handleViewLive}
-                className="w-full mt-6 py-4 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 group/btn"
+                disabled={imgError}
+                className={`w-full mt-6 py-4 text-[10px] font-black uppercase tracking-[0.3em] rounded-xl shadow-xl transition-all flex items-center justify-center gap-3 group/btn ${
+                  imgError 
+                    ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-500 text-white active:scale-95'
+                }`}
             >
-                <span>Initiate Uplink</span>
-                <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                {imgError ? (
+                  <>
+                    <span>Feed Lost</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                  </>
+                ) : (
+                  <>
+                    <span>Initiate Uplink</span>
+                    <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                  </>
+                )}
             </button>
         </div>
       )}
@@ -112,7 +126,14 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
           />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center text-zinc-800 bg-[#0c0a09] border-b border-zinc-800/30">
-            {isSpeedCamera ? (
+            {imgError ? (
+               <div className="flex flex-col items-center animate-in fade-in duration-300">
+                 <div className="w-10 h-10 bg-red-900/20 border border-red-900/50 rounded-xl flex items-center justify-center mb-2 shadow-[0_0_15px_rgba(127,29,29,0.2)]">
+                   <svg className="w-5 h-5 text-red-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                 </div>
+                 <span className="text-[9px] font-black uppercase tracking-[0.2em] text-red-900/60">Signal Lost</span>
+               </div>
+            ) : isSpeedCamera ? (
                <div className="flex flex-col items-center">
                  <div className="w-10 h-10 border border-zinc-800 rounded-xl flex items-center justify-center mb-2 shadow-inner">
                    <span className="font-mono font-black text-[10px] text-zinc-600">INTEL</span>
@@ -151,16 +172,26 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
           </div>
         )}
         
-        {/* Analyze Button (Mobile Optimized) */}
+        {/* Analyze Button (Mobile Optimized) - Handles Errors */}
         {isFeed && !analysis && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40 backdrop-blur-[1px]">
-            <button
-               onClick={handleAnalyze}
-               disabled={isAnalyzing}
-               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-2xl transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
-            >
-               {isAnalyzing ? 'Processing...' : 'Sync Intel'}
-            </button>
+          <div className={`absolute inset-0 flex items-center justify-center transition-opacity bg-black/40 backdrop-blur-[1px] ${imgError ? 'opacity-100 pointer-events-none' : 'opacity-0 group-hover:opacity-100'}`}>
+            {imgError ? (
+               <button
+                  disabled
+                  className="px-5 py-2.5 bg-zinc-800/90 border border-zinc-700 text-zinc-500 text-[10px] font-black uppercase tracking-widest rounded-xl shadow-2xl flex items-center gap-2 cursor-not-allowed"
+               >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                  <span>Uplink Failed</span>
+               </button>
+            ) : (
+               <button
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-2xl transform translate-y-2 group-hover:translate-y-0 transition-all duration-300"
+               >
+                  {isAnalyzing ? 'Processing...' : 'Sync Intel'}
+               </button>
+            )}
           </div>
         )}
       </div>
@@ -190,3 +221,4 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
 });
 
 export default CameraCard;
+    
