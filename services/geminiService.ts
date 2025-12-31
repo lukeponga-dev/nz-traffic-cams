@@ -127,7 +127,7 @@ export class GeminiService {
     try {
       const response = await this.ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Find major public transport hubs (train stations, ferry terminals) near (${lat}, ${lng}) in New Zealand. Return a JSON array of objects.`,
+        contents: `Find major public transport hubs (train stations, ferry terminals) near (${lat}, ${lng}) in New Zealand. Return a JSON array of objects where each object strictly has keys: "name", "type", "lat" (number), "lng" (number).`,
         config: {
           tools: [{ googleMaps: {} }]
           // responseMimeType and responseSchema removed as they are prohibited with googleMaps tool

@@ -89,12 +89,16 @@ const CameraMap: React.FC<CameraMapProps> = ({
     if (!addressQuery.trim()) return;
     setIsSearching(true);
     const result = await geminiService.searchAddress(addressQuery);
-    if (result && mapRef.current) {
+    
+    // Safety Check: Ensure lat and lng are valid numbers before passing to Leaflet
+    if (result && typeof result.lat === 'number' && typeof result.lng === 'number' && mapRef.current) {
       mapRef.current.setView([result.lat, result.lng], 15);
       L.popup()
         .setLatLng([result.lat, result.lng])
         .setContent(`<div class="p-3 bg-[#18181b] text-white rounded-xl border border-blue-500/30 text-[10px] font-bold uppercase">${result.label}</div>`)
         .openOn(mapRef.current);
+    } else {
+        console.warn("Invalid coordinates received from address search", result);
     }
     setIsSearching(false);
     setAddressQuery('');
@@ -136,7 +140,10 @@ const CameraMap: React.FC<CameraMapProps> = ({
       } 
       else if (layerId === 'transport') {
         const hubs = await geminiService.getTransportIntelligence(center.lat, center.lng);
-        const markers = hubs.map(hub => {
+        // Safety Filter: Filter out any items where lat or lng are missing or invalid
+        const validHubs = hubs.filter(hub => hub && typeof hub.lat === 'number' && typeof hub.lng === 'number');
+        
+        const markers = validHubs.map(hub => {
           const icon = L.divIcon({
             html: `<div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-center shadow-xl">
               <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 17a2 2 0 100 4 2 2 0 000-4zm11 0a2 2 0 100 4 2 2 0 000-4zM7 17h10V9H7v8zM7 9l1-2h8l1 2M5 19h14"/></svg>
@@ -146,7 +153,10 @@ const CameraMap: React.FC<CameraMapProps> = ({
           });
           return L.marker([hub.lat, hub.lng], { icon }).bindPopup(`<div class="text-[10px] font-black text-white p-2 uppercase">${hub.name} (${hub.type})</div>`);
         });
-        transportLayerRef.current = L.featureGroup(markers).addTo(mapRef.current);
+        
+        if (markers.length > 0) {
+             transportLayerRef.current = L.featureGroup(markers).addTo(mapRef.current);
+        }
       }
       else if (layerId === 'hazards') {
         const centerNews = await geminiService.getRegionalTrafficNews('Current Matrix', `near lat:${center.lat} lng:${center.lng}`);
@@ -311,17 +321,20 @@ const CameraMap: React.FC<CameraMapProps> = ({
           </div>
         </div>
       `;
-      const marker = L.marker([camera.latitude, camera.longitude], { 
-        icon: L.divIcon({ html: iconHtml, className: 'custom-marker', iconSize: [40, 40], iconAnchor: [20, 20] })
-      });
-      const popupHtml = `<div class="p-4 bg-[#18181b] text-white rounded-2xl min-w-[260px] border border-zinc-800 shadow-2xl overflow-hidden relative"><div class="absolute top-0 left-0 w-full h-1" style="background: ${color}"></div><h4 class="font-bold text-sm mb-3 mt-1">${camera.name}</h4><div class="grid grid-cols-2 gap-2 mb-4"><button id="set-origin-${camera.id}" class="py-2.5 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white text-[10px] font-black uppercase rounded-lg border border-emerald-500/20 transition-all ${isOrigin ? 'ring-2 ring-emerald-500' : ''}">Origin</button><button id="set-dest-${camera.id}" class="py-2.5 bg-amber-600/10 hover:bg-amber-600 text-amber-500 hover:text-white text-[10px] font-black uppercase rounded-lg border border-amber-500/20 transition-all ${isDest ? 'ring-2 ring-amber-500' : ''}">Target</button></div><button id="view-feed-${camera.id}" class="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase rounded-lg transition-all active:scale-95">Engage Feed</button></div>`;
-      marker.bindPopup(popupHtml, { closeButton: false, offset: [0, -10] });
-      marker.on('popupopen', () => {
-        document.getElementById(`set-origin-${camera.id}`)?.addEventListener('click', () => onSetRouteOrigin(camera));
-        document.getElementById(`set-dest-${camera.id}`)?.addEventListener('click', () => onSetRouteDestination(camera));
-        document.getElementById(`view-feed-${camera.id}`)?.addEventListener('click', () => onViewLive(camera));
-      });
-      clusterGroupRef.current.addLayer(marker);
+      // Ensure we don't pass undefined/invalid lat/lng to Leaflet here as well, although trafficService generally handles parsing defaults.
+      if (typeof camera.latitude === 'number' && typeof camera.longitude === 'number' && !isNaN(camera.latitude) && !isNaN(camera.longitude)) {
+        const marker = L.marker([camera.latitude, camera.longitude], { 
+            icon: L.divIcon({ html: iconHtml, className: 'custom-marker', iconSize: [40, 40], iconAnchor: [20, 20] })
+        });
+        const popupHtml = `<div class="p-4 bg-[#18181b] text-white rounded-2xl min-w-[260px] border border-zinc-800 shadow-2xl overflow-hidden relative"><div class="absolute top-0 left-0 w-full h-1" style="background: ${color}"></div><h4 class="font-bold text-sm mb-3 mt-1">${camera.name}</h4><div class="grid grid-cols-2 gap-2 mb-4"><button id="set-origin-${camera.id}" class="py-2.5 bg-emerald-600/10 hover:bg-emerald-600 text-emerald-500 hover:text-white text-[10px] font-black uppercase rounded-lg border border-emerald-500/20 transition-all ${isOrigin ? 'ring-2 ring-emerald-500' : ''}">Origin</button><button id="set-dest-${camera.id}" class="py-2.5 bg-amber-600/10 hover:bg-amber-600 text-amber-500 hover:text-white text-[10px] font-black uppercase rounded-lg border border-amber-500/20 transition-all ${isDest ? 'ring-2 ring-amber-500' : ''}">Target</button></div><button id="view-feed-${camera.id}" class="w-full py-2.5 bg-zinc-800 hover:bg-zinc-700 text-white text-[10px] font-black uppercase rounded-lg transition-all active:scale-95">Engage Feed</button></div>`;
+        marker.bindPopup(popupHtml, { closeButton: false, offset: [0, -10] });
+        marker.on('popupopen', () => {
+            document.getElementById(`set-origin-${camera.id}`)?.addEventListener('click', () => onSetRouteOrigin(camera));
+            document.getElementById(`set-dest-${camera.id}`)?.addEventListener('click', () => onSetRouteDestination(camera));
+            document.getElementById(`view-feed-${camera.id}`)?.addEventListener('click', () => onViewLive(camera));
+        });
+        clusterGroupRef.current.addLayer(marker);
+      }
     });
     mapRef.current.addLayer(clusterGroupRef.current);
   }, [cameras, routeOrigin, routeDestination, onSetRouteOrigin, onSetRouteDestination, onViewLive]);
