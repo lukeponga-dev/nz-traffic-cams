@@ -407,39 +407,41 @@ const CameraMap: React.FC<CameraMapProps> = ({
          </div>
       </div>
 
-      {/* Map Control HUD (Left Sidebar) */}
-      <div className="absolute top-24 left-6 z-[400] flex flex-col gap-4 w-full max-w-sm">
-        <form onSubmit={handleAddressSearch} className="relative group">
+      {/* Map Control HUD (Centered Floating Search) */}
+      <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[400] flex flex-col gap-3 w-full max-w-md px-4 pointer-events-none">
+        <form onSubmit={handleAddressSearch} className="relative group pointer-events-auto">
           <input 
             type="text" 
             placeholder="Search address or landmark..." 
             value={addressQuery}
             onChange={(e) => setAddressQuery(e.target.value)}
-            className="w-full bg-[#0c0a09]/95 backdrop-blur-xl border border-white/10 rounded-2xl px-5 py-3.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:border-blue-500/50 shadow-2xl"
+            className="w-full bg-[#0c0a09]/90 backdrop-blur-xl border border-white/10 rounded-full px-6 py-4 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-blue-500/50 shadow-2xl transition-all"
           />
-          <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-zinc-500 hover:text-blue-500 transition-colors">
+          <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-zinc-800 rounded-full text-zinc-400 hover:text-white hover:bg-blue-600 transition-all">
             {isSearching ? (
-              <div className="w-4 h-4 border-2 border-zinc-700 border-t-blue-500 rounded-full animate-spin"></div>
+              <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
             ) : (
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
             )}
           </button>
         </form>
 
-        <button 
-          onClick={toggleTracking}
-          className={`w-fit backdrop-blur-xl border rounded-2xl px-5 py-3 flex items-center gap-3 shadow-2xl transition-all active:scale-95 ${isTracking ? 'bg-blue-600/20 border-blue-500 text-blue-400' : 'bg-[#0c0a09]/95 border-white/10 text-zinc-400 hover:border-blue-500/50'}`}
-        >
-          {isTracking ? (
-            <div className="relative flex h-3 w-3">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500"></span>
-            </div>
-          ) : (
-            <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          )}
-          <span className="text-[10px] font-black uppercase tracking-widest">{isTracking ? 'Tracking Active' : 'Live GPS'}</span>
-        </button>
+        <div className="flex justify-center pointer-events-auto">
+           <button 
+             onClick={toggleTracking}
+             className={`w-fit backdrop-blur-xl border rounded-full px-5 py-2 flex items-center gap-3 shadow-2xl transition-all active:scale-95 ${isTracking ? 'bg-blue-600/90 border-blue-500 text-white' : 'bg-[#0c0a09]/90 border-white/10 text-zinc-400 hover:border-blue-500/50'}`}
+           >
+             {isTracking ? (
+               <div className="relative flex h-2.5 w-2.5">
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+               </div>
+             ) : (
+               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+             )}
+             <span className="text-[10px] font-black uppercase tracking-widest">{isTracking ? 'Tracking' : 'GPS'}</span>
+           </button>
+        </div>
       </div>
 
       {/* Origin/Destination Selection HUD */}

@@ -23,7 +23,6 @@ const App: React.FC = () => {
   const [favorites, setFavorites] = useState<string[]>([]);
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   
   const [routeOrigin, setRouteOrigin] = useState<TrafficCamera | null>(null);
   const [routeDestination, setRouteDestination] = useState<TrafficCamera | null>(null);
@@ -330,37 +329,6 @@ const App: React.FC = () => {
              >
                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16"/></svg>
              </button>
-
-             <div className={`
-               ${isMobileSearchOpen ? 'fixed inset-x-0 top-0 h-20 bg-[#0c0c0e] px-5 flex items-center z-[110] animate-in slide-in-from-top duration-300' : 'relative max-w-sm w-full hidden sm:block'}
-             `}>
-               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-                 <svg className="h-4 w-4 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-               </div>
-               <input
-                 type="text"
-                 className="block w-full pl-11 pr-11 py-3 border border-zinc-800 rounded-2xl leading-5 bg-zinc-900/40 text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium backdrop-blur-sm"
-                 placeholder="Locate node by name..."
-                 value={searchQuery}
-                 onChange={(e) => setSearchQuery(e.target.value)}
-                 autoFocus={isMobileSearchOpen}
-               />
-               {searchQuery && (
-                 <button 
-                   onClick={clearSearch}
-                   className="absolute right-14 sm:right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
-                 >
-                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
-                 </button>
-               )}
-             </div>
-
-             <button 
-               onClick={() => setIsMobileSearchOpen(true)}
-               className="p-3 text-zinc-500 hover:text-white sm:hidden active:scale-90"
-             >
-               <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-             </button>
            </div>
 
            <div className="flex items-center gap-4">
@@ -381,6 +349,29 @@ const App: React.FC = () => {
 
         {viewMode === 'grid' ? (
           <div className="flex-1 flex flex-col min-h-0 bg-transparent">
+             <div className="px-5 sm:px-8 pt-6 pb-2 relative z-10">
+               <div className="relative max-w-md w-full">
+                 <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                   <svg className="h-4 w-4 text-zinc-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                 </div>
+                 <input
+                   type="text"
+                   className="block w-full pl-11 pr-11 py-3 border border-zinc-800 rounded-2xl leading-5 bg-zinc-900/60 text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-blue-500/50 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium backdrop-blur-xl shadow-lg"
+                   placeholder="Filter matrix nodes..."
+                   value={searchQuery}
+                   onChange={(e) => setSearchQuery(e.target.value)}
+                 />
+                 {searchQuery && (
+                   <button 
+                     onClick={clearSearch}
+                     className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                   >
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+                   </button>
+                 )}
+               </div>
+             </div>
+          
              <div className="px-5 sm:px-8 py-4 border-b border-zinc-800/30 bg-[#09090b]/40 backdrop-blur-xl relative overflow-hidden flex-shrink-0">
                <div className="flex items-center gap-3 overflow-x-auto custom-scroll no-scrollbar pb-1 mask-linear-fade">
                  {regions.map(region => (
