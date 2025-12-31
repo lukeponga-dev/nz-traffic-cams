@@ -2,7 +2,7 @@
 import { TrafficCamera, Severity, Trend } from '../types';
 
 const BASE_TRAFFIC_URL = 'https://trafficnz.info';
-// Specified REST v4 endpoint for the comprehensive camera list
+// Comprehensive REST v4 endpoint for the New Zealand camera matrix
 const XML_ENDPOINT = 'https://trafficnz.info/service/traffic/rest/4/cameras/all';
 
 /**
@@ -45,24 +45,6 @@ const FALLBACK_CAMERAS: TrafficCamera[] = [
     trend: 'stable',
     confidence: 99,
     lastUpdate: new Date().toLocaleTimeString()
-  },
-  {
-    id: "FB-WLG-01",
-    name: "SH1: Terrace Tunnel",
-    description: "Tunnel approach - Backup Uplink",
-    imageUrl: "https://www.trafficnz.info/camera/images/423.jpg",
-    region: "Wellington",
-    latitude: -41.285,
-    longitude: 174.773,
-    direction: "North",
-    journeyLegs: ["Wellington - City"],
-    type: "feed",
-    status: "Operational",
-    source: "Static Matrix Fallback",
-    severity: 'low',
-    trend: 'stable',
-    confidence: 99,
-    lastUpdate: new Date().toLocaleTimeString()
   }
 ];
 
@@ -73,20 +55,19 @@ interface ProxyConfig {
 
 /**
  * Tactical proxy pool. 
- * Mixes JSON-wrapping (AllOrigins) with direct text proxies for maximum reliability.
+ * Orchestrates a prioritized failover system for cross-origin data retrieval.
  */
 const PROXIES: ProxyConfig[] = [
   { url: 'https://api.allorigins.win/get?url=', type: 'json' },
   { url: 'https://corsproxy.io/?', type: 'text' },
-  { url: 'https://api.codetabs.com/v1/proxy?url=', type: 'text' },
-  { url: 'https://thingproxy.freeboard.io/fetch/', type: 'text' }
+  { url: 'https://api.codetabs.com/v1/proxy?url=', type: 'text' }
 ];
 
 export class TrafficService {
   /**
    * Fetches data with an explicit abort signal to prevent hanging requests
    */
-  private async fetchWithTimeout(url: string, options: RequestInit, timeout = 12000): Promise<Response> {
+  private async fetchWithTimeout(url: string, options: RequestInit, timeout = 10000): Promise<Response> {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), timeout);
     try {
@@ -100,9 +81,25 @@ export class TrafficService {
   }
 
   /**
+   * Intelligence: Scans description and status for keywords to determine severity and trend.
+   */
+  private determineIntelligence(description: string, status: string): { severity: Severity; trend: Trend } {
+    const text = (description + ' ' + status).toLowerCase();
+    
+    let severity: Severity = 'low';
+    if (text.includes('heavy') || text.includes('congestion') || text.includes('blocked')) severity = 'high';
+    else if (text.includes('slow') || text.includes('moderate') || text.includes('incident')) severity = 'medium';
+    else if (text.includes('critical') || text.includes('accident') || text.includes('closure')) severity = 'critical';
+
+    let trend: Trend = 'stable';
+    if (text.includes('improving') || text.includes('clearing')) trend = 'improving';
+    else if (text.includes('building') || text.includes('increasing') || text.includes('escalating')) trend = 'escalating';
+
+    return { severity, trend };
+  }
+
+  /**
    * Orchestrates the synchronization process across the proxy pool.
-   * Resolves the 'Critical: All synchronization proxies failed' error by ensuring
-   * a meaningful fallback is always returned.
    */
   async fetchLiveCameras(): Promise<TrafficCamera[]> {
     console.log("Initiating Traffic Matrix Sync (REST v4)...");
@@ -115,10 +112,7 @@ export class TrafficService {
 
         const response = await this.fetchWithTimeout(targetUrl, { method: 'GET' });
         
-        if (!response.ok) {
-          console.warn(`Node ${proxy.url} returned status ${response.status}. Retrying via alternate vector...`);
-          continue;
-        }
+        if (!response.ok) continue;
 
         let xmlText = '';
         if (proxy.type === 'json') {
@@ -130,13 +124,12 @@ export class TrafficService {
         
         // Basic validation: ignore HTML error pages returned by proxies
         if (!xmlText || xmlText.trim().startsWith('<!DOCTYPE html') || xmlText.trim().startsWith('<html')) {
-          console.warn(`Node ${proxy.url} returned invalid bitstream (HTML).`);
           continue;
         }
 
         const parsed = this.parseTrafficXml(xmlText);
         if (parsed.length > 0) {
-          console.log(`Synchronization Successful: ${parsed.length} nodes decrypted via ${proxy.url}`);
+          console.log(`Sync Successful: ${parsed.length} nodes decrypted via ${proxy.url}`);
           return parsed;
         }
       } catch (error: any) {
@@ -144,46 +137,50 @@ export class TrafficService {
       }
     }
 
-    console.error("Critical: All synchronization proxies failed. Engaging emergency fallback dataset.");
+    console.error("Critical: Proxy pool exhausted. Engaging emergency fallback.");
     return FALLBACK_CAMERAS;
   }
 
   /**
    * Parses the XML stream into structured camera objects.
-   * Handles the REST v4 schema which nests location data.
+   * Extracts advanced telemetry including nested coordinates and status indicators.
    */
   private parseTrafficXml(xmlString: string): TrafficCamera[] {
     const parser = new DOMParser();
     const xmlDoc = parser.parseFromString(xmlString, "text/xml");
     
-    const parseError = xmlDoc.getElementsByTagName("parsererror");
-    if (parseError.length > 0) {
+    if (xmlDoc.getElementsByTagName("parsererror").length > 0) {
       console.error("Bitstream Corruption: Failed to parse XML.");
       return [];
     }
 
-    // Support both 'trafficCamera' (v4) and 'camera' (v3/Legacy)
+    // Support for both 'trafficCamera' (v4) and legacy 'camera' tags
     const cameraNodes = xmlDoc.querySelectorAll("trafficCamera, camera");
     const parsedCameras: TrafficCamera[] = [];
     
     cameraNodes.forEach(node => {
-      const getVal = (s: string) => node.querySelector(s)?.textContent?.trim() || "";
+      const getVal = (selector: string) => {
+        // Handle nested selectors like 'location > latitude'
+        const parts = selector.split(' > ');
+        let target: Element | null | undefined = node as Element;
+        for (const part of parts) {
+          target = target?.querySelector(part);
+        }
+        return target?.textContent?.trim() || "";
+      };
       
-      // REST v4 often nests coordinates in a <location> tag
       const lat = parseFloat(getVal("location > latitude") || getVal("latitude") || "0");
       const lng = parseFloat(getVal("location > longitude") || getVal("longitude") || "0");
 
       if (lat && lng) {
+        const description = getVal("description") || "Live matrix uplink";
         const status = getVal("status") || "Operational";
-        
-        // Dynamic intelligence generation for UI depth
-        const severities: Severity[] = ['low', 'low', 'low', 'medium', 'medium', 'high'];
-        const trends: Trend[] = ['improving', 'stable', 'stable', 'escalating'];
+        const { severity, trend } = this.determineIntelligence(description, status);
         
         parsedCameras.push({
           id: getVal("id") || `node-${Math.random().toString(36).substr(2, 5)}`,
           name: getVal("name") || "Surveillance Node",
-          description: getVal("description") || "Live matrix uplink",
+          description,
           imageUrl: this.normalizeImageUrl(getVal("imageUrl") || getVal("url")),
           region: getVal("region") || "NZ Sector",
           latitude: lat,
@@ -193,9 +190,9 @@ export class TrafficService {
           type: 'feed',
           status,
           source: 'TrafficNZ REST v4',
-          severity: status.includes('Construction') ? 'medium' : severities[Math.floor(Math.random() * severities.length)],
-          trend: trends[Math.floor(Math.random() * trends.length)],
-          confidence: 80 + Math.floor(Math.random() * 19),
+          severity,
+          trend,
+          confidence: 85 + Math.floor(Math.random() * 15),
           lastUpdate: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         });
       }
@@ -210,10 +207,14 @@ export class TrafficService {
   private normalizeImageUrl(url: string): string {
     if (!url) return "";
     if (url.startsWith('http')) return url;
-    if (url.startsWith('/')) return `${BASE_TRAFFIC_URL}${url}`;
-    // Handle the specific numeric image ID pattern often seen in older feeds
-    if (/^\d+\.jpg$/.test(url)) return `${BASE_TRAFFIC_URL}/camera/images/${url}`;
-    return `${BASE_TRAFFIC_URL}/camera/images/${url}`;
+    const cleanUrl = url.startsWith('/') ? url.slice(1) : url;
+    
+    // Pattern: if the URL is just a filename like '20.jpg'
+    if (/^\d+\.jpg$/.test(cleanUrl)) {
+      return `${BASE_TRAFFIC_URL}/camera/images/${cleanUrl}`;
+    }
+    
+    return `${BASE_TRAFFIC_URL}/${cleanUrl}`;
   }
 }
 

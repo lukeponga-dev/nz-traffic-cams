@@ -1,4 +1,5 @@
 
+// Fix: remove responseMimeType and responseSchema from googleMaps tool usage per guidelines.
 import { GoogleGenAI, Type, Modality, LiveServerMessage } from "@google/genai";
 import { CongestionAnalysis, MapGroundingResult, SearchGroundingResult, AdvancedIntelligence } from "../types";
 
@@ -21,22 +22,16 @@ export class GeminiService {
     try {
       const response = await this.ai.models.generateContent({
         model: "gemini-2.5-flash",
-        contents: `Find the exact latitude and longitude for the address: "${query}" in New Zealand. Return only a JSON object.`,
+        contents: `Find the exact latitude and longitude for the address: "${query}" in New Zealand. Return only a JSON object like {"lat": -36.8, "lng": 174.7, "label": "Address Name"}.`,
         config: {
-          tools: [{ googleMaps: {} }],
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              lat: { type: Type.NUMBER },
-              lng: { type: Type.NUMBER },
-              label: { type: Type.STRING }
-            },
-            required: ["lat", "lng", "label"]
-          }
+          tools: [{ googleMaps: {} }]
+          // responseMimeType and responseSchema removed as they are prohibited with googleMaps tool
         }
       });
-      return JSON.parse(response.text || 'null');
+      // Extracting JSON from text response as grounding tools don't support structured output config
+      const text = response.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : null;
     } catch (e) {
       console.error("Address search failed:", e);
       return null;
@@ -100,6 +95,49 @@ export class GeminiService {
       return result;
     } catch (error) {
       return { level: 'unknown', reasoning: 'Prediction offline.', timestamp: '' };
+    }
+  }
+
+  async getWeatherIntelligence(lat: number, lng: number): Promise<{ temp: string; condition: string; visibility: string }> {
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `Provide the current weather conditions at coordinates (${lat}, ${lng}) in New Zealand. Respond only with a JSON object.`,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              temp: { type: Type.STRING, description: "e.g. 18°C" },
+              condition: { type: Type.STRING, description: "e.g. Overcast" },
+              visibility: { type: Type.STRING, description: "e.g. Good" }
+            },
+            required: ["temp", "condition", "visibility"]
+          }
+        }
+      });
+      return JSON.parse(response.text || '{}');
+    } catch (e) {
+      return { temp: "N/A", condition: "Unknown", visibility: "Unknown" };
+    }
+  }
+
+  async getTransportIntelligence(lat: number, lng: number): Promise<{ name: string; type: string; lat: number; lng: number }[]> {
+    try {
+      const response = await this.ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Find major public transport hubs (train stations, ferry terminals) near (${lat}, ${lng}) in New Zealand. Return a JSON array of objects.`,
+        config: {
+          tools: [{ googleMaps: {} }]
+          // responseMimeType and responseSchema removed as they are prohibited with googleMaps tool
+        }
+      });
+      const text = response.text || '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      return jsonMatch ? JSON.parse(jsonMatch[0]) : [];
+    } catch (e) {
+      return [];
     }
   }
 
@@ -255,7 +293,7 @@ export class GeminiService {
         contents: `Strategic assessment for "${camera.name}" node in NZ matrix. Suggest structural optimizations.`,
         config: { thinkingConfig: { thinkingBudget: 32768 } }
       });
-      return { thought: (response as any).thought, response: response.text || "Error." };
+      return { response: response.text || "Error." };
     } catch (error) {
       return { response: "Logic offline." };
     }

@@ -1,4 +1,5 @@
 
+// Add missing React import
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { TrafficCamera, MapGroundingResult, Severity } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -36,6 +37,11 @@ const CameraMap: React.FC<CameraMapProps> = ({
   const clusterGroupRef = useRef<any>(null);
   const routeLayerRef = useRef<any>(null);
   const userMarkerRef = useRef<any>(null);
+  
+  // Tactical Layers Refs
+  const weatherLayerRef = useRef<any>(null);
+  const transportLayerRef = useRef<any>(null);
+  const hazardLayerRef = useRef<any>(null);
 
   const [routeBriefing, setRouteBriefing] = useState<string | null>(null);
   const [showBriefing, setShowBriefing] = useState(false);
@@ -43,9 +49,11 @@ const CameraMap: React.FC<CameraMapProps> = ({
   const [isBriefingLoading, setIsBriefingLoading] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   
-  // Search state
+  // HUD State
   const [addressQuery, setAddressQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [activeLayers, setActiveLayers] = useState<Set<string>>(new Set());
+  const [isLayerLoading, setIsLayerLoading] = useState<string | null>(null);
 
   const handleClearRoute = useCallback(() => {
     onSetRouteOrigin(null);
@@ -80,6 +88,75 @@ const CameraMap: React.FC<CameraMapProps> = ({
     }
     setIsSearching(false);
     setAddressQuery('');
+  };
+
+  const toggleLayer = async (layerId: string) => {
+    if (!mapRef.current) return;
+    
+    const newLayers = new Set(activeLayers);
+    if (newLayers.has(layerId)) {
+      newLayers.delete(layerId);
+      if (layerId === 'weather') mapRef.current.removeLayer(weatherLayerRef.current);
+      if (layerId === 'transport') mapRef.current.removeLayer(transportLayerRef.current);
+      if (layerId === 'hazards') mapRef.current.removeLayer(hazardLayerRef.current);
+      setActiveLayers(newLayers);
+      return;
+    }
+
+    newLayers.add(layerId);
+    setActiveLayers(newLayers);
+    setIsLayerLoading(layerId);
+    
+    const center = mapRef.current.getCenter();
+    
+    try {
+      if (layerId === 'weather') {
+        const data = await geminiService.getWeatherIntelligence(center.lat, center.lng);
+        const icon = L.divIcon({
+          html: `<div class="relative flex flex-col items-center group">
+            <div class="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 backdrop-blur-md flex items-center justify-center animate-pulse">
+              <span class="text-[10px] font-black text-blue-400">${data.temp}</span>
+            </div>
+            <div class="absolute -bottom-8 whitespace-nowrap px-2 py-0.5 bg-black/80 rounded border border-white/10 text-[8px] font-black text-white uppercase opacity-0 group-hover:opacity-100 transition-opacity">${data.condition}</div>
+          </div>`,
+          className: 'weather-icon',
+          iconSize: [48, 48]
+        });
+        weatherLayerRef.current = L.featureGroup([L.marker([center.lat, center.lng], { icon })]).addTo(mapRef.current);
+      } 
+      else if (layerId === 'transport') {
+        const hubs = await geminiService.getTransportIntelligence(center.lat, center.lng);
+        const markers = hubs.map(hub => {
+          const icon = L.divIcon({
+            html: `<div class="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-center shadow-xl">
+              <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M8 17a2 2 0 100 4 2 2 0 000-4zm11 0a2 2 0 100 4 2 2 0 000-4zM7 17h10V9H7v8zM7 9l1-2h8l1 2M5 19h14"/></svg>
+            </div>`,
+            className: 'transport-icon',
+            iconSize: [32, 32]
+          });
+          return L.marker([hub.lat, hub.lng], { icon }).bindPopup(`<div class="text-[10px] font-black text-white p-2 uppercase">${hub.name} (${hub.type})</div>`);
+        });
+        transportLayerRef.current = L.featureGroup(markers).addTo(mapRef.current);
+      }
+      else if (layerId === 'hazards') {
+        const centerNews = await geminiService.getRegionalTrafficNews('Current Matrix', `near lat:${center.lat} lng:${center.lng}`);
+        const icon = L.divIcon({
+          html: `<div class="relative">
+            <div class="absolute inset-0 bg-red-600/20 rounded-full animate-ping"></div>
+            <div class="w-10 h-10 rounded-full bg-red-600 border-2 border-white flex items-center justify-center shadow-2xl relative">
+              <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+            </div>
+          </div>`,
+          className: 'hazard-icon',
+          iconSize: [40, 40]
+        });
+        hazardLayerRef.current = L.featureGroup([L.marker([center.lat, center.lng], { icon }).bindPopup(`<div class="p-3 bg-black text-white text-[9px] font-bold uppercase w-48 leading-relaxed">${centerNews.text}</div>`)]).addTo(mapRef.current);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLayerLoading(null);
+    }
   };
 
   const locateUser = () => {
@@ -215,7 +292,38 @@ const CameraMap: React.FC<CameraMapProps> = ({
     <div className="relative w-full h-full bg-[#09090b] overflow-hidden">
       <div ref={mapContainerRef} className="w-full h-full z-10" />
 
-      {/* Map Control HUD */}
+      {/* Layer Control HUD (Right Sidebar) */}
+      <div className="absolute top-24 right-6 z-[400] flex flex-col gap-3">
+         <div className="bg-[#0c0a09]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-2 flex flex-col gap-2 shadow-2xl">
+            <h4 className="text-[8px] font-black text-zinc-600 uppercase tracking-widest text-center py-1">Layer HUD</h4>
+            {[
+              { id: 'weather', icon: 'M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z' },
+              { id: 'transport', icon: 'M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H5a2 2 0 00-2 2v5a2 2 0 002 2z M9 9h6 M11 15h2' },
+              { id: 'hazards', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' }
+            ].map(layer => (
+              <button
+                key={layer.id}
+                onClick={() => toggleLayer(layer.id)}
+                className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all active:scale-90 relative ${
+                  activeLayers.has(layer.id) ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20' : 'bg-zinc-900/50 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {isLayerLoading === layer.id ? (
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={layer.icon}/>
+                  </svg>
+                )}
+                {activeLayers.has(layer.id) && (
+                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-400 rounded-full border-2 border-[#09090b] animate-pulse"></div>
+                )}
+              </button>
+            ))}
+         </div>
+      </div>
+
+      {/* Map Control HUD (Left Sidebar) */}
       <div className="absolute top-24 left-6 z-[400] flex flex-col gap-4 w-full max-w-sm">
         <form onSubmit={handleAddressSearch} className="relative group">
           <input 
@@ -254,7 +362,7 @@ const CameraMap: React.FC<CameraMapProps> = ({
       )}
 
       {routeStats && (
-        <div className="absolute top-24 right-6 z-[400] animate-in slide-in-from-right-10 pointer-events-none">
+        <div className="absolute top-24 right-24 z-[400] animate-in slide-in-from-right-10 pointer-events-none">
            <div className="bg-[#0c0a09]/95 backdrop-blur-3xl border border-blue-500/30 p-5 rounded-3xl shadow-2xl flex flex-col gap-5 pointer-events-auto min-w-[240px]">
               <div className="flex justify-between items-center">
                  <h4 className="text-[9px] font-black text-zinc-500 uppercase tracking-widest">Vector Params</h4>

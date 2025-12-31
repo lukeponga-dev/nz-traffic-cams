@@ -32,7 +32,51 @@ const App: React.FC = () => {
   const [activeModalCamera, setActiveModalCamera] = useState<TrafficCamera | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   
+  // PWA & Connectivity States
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
   const observerTarget = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsInstalled(true);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    // Check if already in standalone mode
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -164,6 +208,18 @@ const App: React.FC = () => {
           icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"/></svg>}
         />
 
+        {deferredPrompt && (
+          <div className="mt-4 px-2">
+            <button 
+              onClick={handleInstallClick}
+              className="w-full group relative flex items-center gap-4 px-5 py-4 rounded-2xl bg-emerald-600/10 text-emerald-500 border border-emerald-500/20 shadow-lg transition-all active:scale-[0.97] hover:bg-emerald-600/20"
+            >
+              <svg className="w-5 h-5 animate-bounce" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+              <span className="text-xs font-black uppercase tracking-widest">Deploy to Device</span>
+            </button>
+          </div>
+        )}
+
         <div className="pt-8 pb-3 px-5">
            <span className="text-[10px] font-black text-zinc-700 uppercase tracking-widest">Network Analytics</span>
         </div>
@@ -188,7 +244,7 @@ const App: React.FC = () => {
          <div className="bg-zinc-900/60 rounded-[2rem] p-5 border border-zinc-800 backdrop-blur-md">
             <div className="flex justify-between items-center mb-3">
                <span className="text-[9px] font-black text-zinc-600 uppercase tracking-[0.3em]">Sync Stream</span>
-               <div className="flex h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6] animate-pulse"></div>
+               <div className={`flex h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-blue-500 shadow-[0_0_8px_#3b82f6]' : 'bg-red-500 shadow-[0_0_8px_#ef4444]'} animate-pulse`}></div>
             </div>
             <div className="flex justify-between items-center text-[9px] font-black text-zinc-500 uppercase tracking-widest mb-4">
                <span>Last Uplink</span>
@@ -207,6 +263,12 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-[#09090b] text-zinc-100 overflow-hidden font-sans">
       
+      {!isOnline && (
+        <div className="fixed top-0 inset-x-0 z-[2000] bg-red-600 text-white text-[10px] font-black uppercase tracking-[0.3em] py-1 text-center shadow-2xl">
+          Offline Mode: Tactical Satellite Fallback Engaged
+        </div>
+      )}
+
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-md z-[90] md:hidden animate-in fade-in duration-300"
@@ -266,13 +328,16 @@ const App: React.FC = () => {
 
            <div className="flex items-center gap-4">
               <div className="flex flex-col items-end shrink-0">
+                 {!isOnline && (
+                   <span className="text-[9px] font-black text-red-500 uppercase tracking-widest animate-pulse">Offline</span>
+                 )}
                  <span className="text-[9px] font-black text-zinc-700 uppercase tracking-widest hidden xs:block">Network Coverage</span>
                  <span className="text-[10px] sm:text-xs font-mono text-blue-500 font-black">
                    {Math.round((stats.visible / stats.total) * 100)}% ACTIVE
                  </span>
               </div>
               <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-[10px] font-black text-zinc-600 shadow-inner group cursor-pointer hover:border-blue-500/50 transition-all active:scale-95">
-                OS
+                {isInstalled ? 'OS' : 'NEW'}
               </div>
            </div>
         </header>

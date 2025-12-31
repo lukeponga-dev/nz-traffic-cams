@@ -5,6 +5,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TRAFFIC COMMAND | Surveillance Matrix</title>
+  
+  <!-- PWA & Mobile Meta -->
+  <meta name="theme-color" content="#09090b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TrafficOS">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3246/3246665.png">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -58,6 +67,14 @@
       100% { opacity: 1; transform: scale(1); }
     }
     .status-pulse { animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    
+    /* PWA Install Prompt Fix */
+    @media all and (display-mode: standalone) {
+      body {
+        -webkit-user-select: none;
+        user-select: none;
+      }
+    }
   </style>
   <script type="importmap">
   {
@@ -76,5 +93,27 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
   <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script>
+    // Robust Service Worker registration to handle varying origin environments
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        // Use a relative path to sw.js. 
+        // In sandboxed environments like AI Studio, Service Workers may fail due to origin restrictions.
+        const swPath = 'sw.js'; 
+        navigator.serviceWorker.register(swPath)
+          .then(reg => {
+            console.log('Matrix Uplink (SW) Registered:', reg.scope);
+          })
+          .catch(err => {
+            // Gracefully handle origin/security errors common in cloud development environments
+            if (err.name === 'SecurityError' || err.message.includes('origin')) {
+              console.warn('Matrix Uplink (SW) Service Restricted: Offline capabilities disabled in this environment origin.');
+            } else {
+              console.error('Matrix Uplink (SW) Registration Error:', err);
+            }
+          });
+      });
+    }
+  </script>
 </body>
 </html>

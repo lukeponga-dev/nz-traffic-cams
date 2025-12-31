@@ -10,10 +10,18 @@ interface CameraCardProps {
   onViewLive: (camera: TrafficCamera) => void;
 }
 
+const DetailRow = ({ label, value }: { label: string, value: string }) => (
+  <div className="flex flex-col gap-1">
+    <span className="text-[9px] font-black text-zinc-600 uppercase tracking-widest">{label}</span>
+    <span className="text-xs text-zinc-300 font-mono truncate" title={value}>{value}</span>
+  </div>
+);
+
 const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, onToggleFavorite, onViewLive }) => {
   const [analysis, setAnalysis] = useState<CongestionAnalysis | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const isFeed = camera.type === 'feed';
   const isSpeedCamera = camera.type === 'spot-speed' || camera.type === 'point-to-point';
@@ -34,11 +42,64 @@ const CameraCard: React.FC<CameraCardProps> = React.memo(({ camera, isFavorite, 
     return 'bg-zinc-500';
   }, [camera.status, imgError]);
 
+  const handleCardClick = () => {
+    setShowDetails(true);
+  };
+
+  const handleViewLive = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onViewLive(camera);
+  };
+
+  const handleCloseDetails = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDetails(false);
+  };
+
   return (
     <div 
-      className="group bg-[#18181b]/60 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all duration-300 flex flex-col relative shadow-lg active:scale-[0.98]"
-      onClick={() => onViewLive(camera)}
+      className="group bg-[#18181b]/60 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700 transition-all duration-300 flex flex-col relative shadow-lg active:scale-[0.98] cursor-pointer"
+      onClick={handleCardClick}
     >
+      {/* Technical Spec Overlay */}
+      {showDetails && (
+        <div 
+            className="absolute inset-0 z-50 bg-[#09090b]/95 backdrop-blur-xl p-6 flex flex-col animate-in fade-in zoom-in-95 duration-200 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+        >
+            <div className="flex justify-between items-start mb-6 border-b border-zinc-800 pb-4">
+                <div className="flex flex-col">
+                    <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-1">Node Spec Sheet</h3>
+                    <span className="text-[9px] font-mono text-zinc-500">{camera.id}</span>
+                </div>
+                <button 
+                    onClick={handleCloseDetails}
+                    className="p-1.5 -mr-2 -mt-2 text-zinc-500 hover:text-white rounded-lg hover:bg-zinc-800 transition-colors"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-y-6 gap-x-4 flex-1">
+                <DetailRow label="Classification" value={camera.type} />
+                <DetailRow label="Region" value={camera.region} />
+                <DetailRow label="Vector Heading" value={camera.direction} />
+                <DetailRow label="Data Source" value={camera.source} />
+                <div className="col-span-2">
+                    <DetailRow label="Geo Coordinates" value={`${camera.latitude.toFixed(5)}, ${camera.longitude.toFixed(5)}`} />
+                </div>
+            </div>
+
+            <button 
+                onClick={handleViewLive}
+                className="w-full mt-6 py-4 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black uppercase tracking-[0.3em] rounded-xl shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 group/btn"
+            >
+                <span>Initiate Uplink</span>
+                <svg className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+            </button>
+        </div>
+      )}
+
       {/* Image Section */}
       <div className="relative aspect-video bg-zinc-900 overflow-hidden">
         {isFeed && !imgError ? (
